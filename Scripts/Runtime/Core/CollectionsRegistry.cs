@@ -112,6 +112,9 @@ namespace BrunoMikoski.ScriptableObjectCollections
             for (int i = 0; i < collections.Count; i++)
             {
                 ScriptableObjectCollection scriptableObjectCollection = collections[i];
+                // A branch switch can leave a dead reference in the serialized list; skip it instead of NRE-ing
+                if (scriptableObjectCollection == null)
+                    continue;
                 Type collectionItemType = scriptableObjectCollection.GetItemType();
                 if (!targetItemType.IsAssignableFrom(collectionItemType))
                     continue;
@@ -204,6 +207,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
             for (int i = 0; i < collections.Count; i++)
             {
                 ScriptableObjectCollection scriptableObjectCollection = collections[i];
+                if (scriptableObjectCollection == null)
+                    continue;
                 Type collectionType = scriptableObjectCollection.GetType();
                 if (collectionType == targetType || (allowSubclasses && collectionType.IsSubclassOf(targetType)))
                     result.Add((T)scriptableObjectCollection);
@@ -225,6 +230,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
             for (int i = 0; i < collections.Count; i++)
             {
                 ScriptableObjectCollection scriptableObjectCollection = collections[i];
+                if (scriptableObjectCollection == null)
+                    continue;
                 if (scriptableObjectCollection.GetItemType().IsAssignableFrom(targetCollectionItemType))
                 {
                     result.Add(scriptableObjectCollection);
@@ -316,6 +323,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
                 for (int i = 0; i < collections.Count; i++)
                 {
                     ScriptableObjectCollection scriptableObjectCollection = collections[i];
+                    if (scriptableObjectCollection == null)
+                        continue;
                     if (scriptableObjectCollection.GUID == targetGUID)
                     {
                         resultCollection = (T) scriptableObjectCollection;
@@ -399,6 +408,14 @@ namespace BrunoMikoski.ScriptableObjectCollections
             for (int i = collections.Count - 1; i >= 0; i--)
             {
                 ScriptableObjectCollection collection = collections[i];
+
+                // A branch switch can leave a dead reference here; drop it so it can't NRE on entering play mode
+                if (collection == null)
+                {
+                    collections.RemoveAt(i);
+                    dirty = true;
+                    continue;
+                }
 
                 if (collection.AutomaticallyLoaded)
                     continue;
