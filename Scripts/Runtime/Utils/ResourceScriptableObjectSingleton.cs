@@ -44,16 +44,7 @@ namespace BrunoMikoski.ScriptableObjectCollections.Core
 
         private static bool TryToLoadInstance<TInstance>(out TInstance result) where TInstance: ScriptableObject
         {
-            // TEMP diagnostic, remove: who forces the load, when, and what the sync cost is.
-            // File, not Debug.Log: the game's TBLogHandler mutes player logs.
-            float t0 = Time.realtimeSinceStartup;
             TInstance newInstance = Resources.Load<TInstance>(typeof(TInstance).Name);
-            string tracePath = System.Environment.GetEnvironmentVariable("TB_SOC_TRACE");
-            if (!string.IsNullOrEmpty(tracePath))
-            {
-                System.IO.File.AppendAllText(tracePath,
-                    $"sync load {typeof(TInstance).Name} {(Time.realtimeSinceStartup - t0) * 1000f:F0}ms at t={t0 * 1000f:F0}ms\n{System.Environment.StackTrace}\n");
-            }
 
             if (newInstance != null)
             {
