@@ -25,14 +25,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
         private bool autoSearchForCollections;
         public bool AutoSearchForCollections => autoSearchForCollections;
 
-        // Async warm: the huge closure streams time-sliced; Instance force-completes it if touched first
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void Initialize()
-        {
-            ResourceRequest request = Resources.LoadAsync<CollectionsRegistry>(nameof(CollectionsRegistry));
-            // TEMP diagnostic, remove with the singleton one
-            request.completed += _ => Debug.Log($"[SOC] async warm completed at t={Time.realtimeSinceStartup * 1000f:F0}ms");
-        }
+        // No boot warm: any request queued before scene load drains inside LoadFirstScene's wait,
+        // putting the whole closure in the boot megaframe. Instance lazy-loads; the game preloads post-boot.
 
         public bool IsKnowCollection(ScriptableObjectCollection targetCollection)
         {
