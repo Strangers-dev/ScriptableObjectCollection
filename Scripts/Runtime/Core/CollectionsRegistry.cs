@@ -25,10 +25,11 @@ namespace BrunoMikoski.ScriptableObjectCollections
         private bool autoSearchForCollections;
         public bool AutoSearchForCollections => autoSearchForCollections;
 
+        // Async warm: the huge closure streams time-sliced; Instance force-completes it if touched first
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize()
         {
-            LoadOrCreateInstance<CollectionsRegistry>();
+            Resources.LoadAsync<CollectionsRegistry>(nameof(CollectionsRegistry));
         }
 
         public bool IsKnowCollection(ScriptableObjectCollection targetCollection)
