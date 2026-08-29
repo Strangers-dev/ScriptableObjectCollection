@@ -63,7 +63,7 @@ namespace BrunoMikoski.ScriptableObjectCollections
                 if (!didCacheIndex)
                 {
                     didCacheIndex = true;
-                    cachedIndex = Collection.Items.IndexOf(this);
+                    cachedIndex = Collection.IndexOf(this);
                 }
                 return cachedIndex;
             }

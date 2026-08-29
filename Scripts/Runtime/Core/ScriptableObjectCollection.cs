@@ -11,7 +11,7 @@ using UnityEditor;
 
 namespace BrunoMikoski.ScriptableObjectCollections
 {
-    public abstract class ScriptableObjectCollection : ScriptableObject, IList
+    public abstract class ScriptableObjectCollection : ScriptableObject, IList, ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
         private LongGuid guid;
@@ -27,15 +27,74 @@ namespace BrunoMikoski.ScriptableObjectCollections
             }
         }
 
+        // Player closure cut: hard item refs drag every asset into the build and load eagerly; player serializes the lazy mirrors instead.
+#if UNITY_EDITOR
         [SerializeField, HideInInspector]
         protected List<ScriptableObject> items = new List<ScriptableObject>();
+#endif
+
+        [SerializeField, HideInInspector]
+        private List<LazyLoadReference<ScriptableObject>> itemRefs = new List<LazyLoadReference<ScriptableObject>>();
+        [SerializeField, HideInInspector]
+        private List<LongGuid> itemGuids = new List<LongGuid>();
+
+#if UNITY_EDITOR
         public List<ScriptableObject> Items => items;
+
+        protected int ItemCount => items.Count;
+        protected ScriptableObject ItemAt(int index) => items[index];
+#else
+        [NonSerialized]
+        private ScriptableObject[] resolvedItems;
+
+        public List<ScriptableObject> Items
+        {
+            get
+            {
+                List<ScriptableObject> result = new List<ScriptableObject>(itemRefs.Count);
+                for (int i = 0; i < itemRefs.Count; i++)
+                {
+                    ScriptableObject item = ItemAt(i);
+                    if (!item)
+                        continue;
+                    result.Add(item);
+                }
+                return result;
+            }
+        }
+
+        protected int ItemCount => itemRefs.Count;
+
+        protected ScriptableObject ItemAt(int index)
+        {
+            if (resolvedItems == null || resolvedItems.Length != itemRefs.Count)
+                resolvedItems = new ScriptableObject[itemRefs.Count];
+
+            ScriptableObject cached = resolvedItems[index];
+            if (cached)
+                return cached;
+
+            cached = itemRefs[index].asset;
+            resolvedItems[index] = cached;
+            return cached;
+        }
+
+        private int IndexOfGuid(LongGuid targetGuid)
+        {
+            for (int i = 0; i < itemGuids.Count; i++)
+            {
+                if (itemGuids[i] == targetGuid)
+                    return i;
+            }
+            return -1;
+        }
+#endif
 
         [SerializeField, HideInInspector]
         private bool automaticallyLoaded = true;
         public bool AutomaticallyLoaded => automaticallyLoaded;
 
-        public int Count => items.Count;
+        public int Count => ItemCount;
 
         public object SyncRoot => throw new NotSupportedException();
         public bool IsSynchronized => throw new NotSupportedException();
@@ -47,7 +106,7 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public ScriptableObject this[int index]
         {
-            get => items[index];
+            get => ItemAt(index);
             set => throw new NotSupportedException();
         }
 
@@ -58,15 +117,33 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public IEnumerator<ScriptableObject> GetEnumerator()
         {
-            using (IEnumerator<ScriptableObject> itemEnum = items.GetEnumerator())
+            for (int i = 0; i < ItemCount; i++)
             {
-                while (itemEnum.MoveNext())
-                {
-                    if (itemEnum.Current.IsNull())
-                        continue;
-                    yield return itemEnum.Current;
-                }
+                ScriptableObject item = ItemAt(i);
+                if (item.IsNull())
+                    continue;
+                yield return item;
             }
+        }
+
+        public void OnBeforeSerialize()
+        {
+#if UNITY_EDITOR
+            itemRefs.Clear();
+            itemGuids.Clear();
+            for (int i = 0; i < items.Count; i++)
+            {
+                ScriptableObject item = items[i];
+                if (!item)
+                    continue;
+                itemRefs.Add(item);
+                itemGuids.Add(item is ISOCItem socItem ? socItem.GUID : default);
+            }
+#endif
+        }
+
+        public void OnAfterDeserialize()
+        {
         }
 
         public void CopyTo(Array array, int index)
@@ -96,6 +173,7 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public bool Add(ScriptableObject item)
         {
+#if UNITY_EDITOR
             if (item is not ISOCItem socItem)
                 return false;
 
@@ -120,6 +198,9 @@ namespace BrunoMikoski.ScriptableObjectCollections
             ObjectUtility.SetDirty(this);
             ClearCachedValues();
             return true;
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public void GenerateNewGUID()
@@ -231,20 +312,32 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public void OrderByName()
         {
+#if UNITY_EDITOR
             items = items.OrderBy(o => o.name).ToList();
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public void Sort(IComparer<ScriptableObject> comparer)
         {
+#if UNITY_EDITOR
             items.Sort(comparer);
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public void Clear()
         {
+#if UNITY_EDITOR
             items.Clear();
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public bool Contains(object value)
@@ -254,7 +347,19 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public bool Contains(ScriptableObject item)
         {
+#if UNITY_EDITOR
             return items.Contains(item);
+#else
+            if (item is ISOCItem socItem)
+                return IndexOfGuid(socItem.GUID) >= 0;
+
+            for (int i = 0; i < ItemCount; i++)
+            {
+                if (ItemAt(i) == item)
+                    return true;
+            }
+            return false;
+#endif
         }
 
         public int IndexOf(object value)
@@ -264,16 +369,32 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public int IndexOf(ScriptableObject item)
         {
+#if UNITY_EDITOR
             return items.IndexOf(item);
+#else
+            if (item is ISOCItem socItem)
+                return IndexOfGuid(socItem.GUID);
+
+            for (int i = 0; i < ItemCount; i++)
+            {
+                if (ItemAt(i) == item)
+                    return i;
+            }
+            return -1;
+#endif
         }
 
         public void Insert(int index, ScriptableObject item)
         {
+#if UNITY_EDITOR
             items.Insert(index, item);
             if (item is ISOCItem socItem)
                 socItem.SetCollection(this);
 
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public void Insert(int index, object value)
@@ -283,12 +404,16 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public bool Remove(ScriptableObject item)
         {
+#if UNITY_EDITOR
             bool result =  items.Remove(item);
             if (item is ISOCItem socItem)
                 socItem.ClearCollection();
 
             ObjectUtility.SetDirty(this);
             return result;
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public void Remove(object value)
@@ -298,8 +423,12 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public void RemoveAt(int index)
         {
+#if UNITY_EDITOR
             items.RemoveAt(index);
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
         public bool Remove(LongGuid targetGuid)
@@ -320,19 +449,25 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public void Swap(int targetIndex, int newIndex)
         {
+#if UNITY_EDITOR
             if (targetIndex >= items.Count || newIndex >= items.Count)
                 return;
 
             (items[targetIndex], items[newIndex]) = (items[newIndex], items[targetIndex]);
             ObjectUtility.SetDirty(this);
+#else
+            throw new NotSupportedException();
+#endif
         }
 
+#if UNITY_EDITOR
         private string Desc(int index)
         {
             var item = items[index];
             string name = item != null ? item.name : "NULL";
             return $"{index} ({name})";
         }
+#endif
 
         public void RefreshCollection()
         {
@@ -476,9 +611,11 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public bool TryGetItemByName(string targetItemName, out ScriptableObject scriptableObjectCollectionItem)
         {
-            for (int i = 0; i < items.Count; i++)
+            for (int i = 0; i < ItemCount; i++)
             {
-                ScriptableObject item = items[i];
+                ScriptableObject item = ItemAt(i);
+                if (!item)
+                    continue;
                 if (string.Equals(item.name, targetItemName, StringComparison.Ordinal))
                 {
                     scriptableObjectCollectionItem = item;
@@ -495,6 +632,7 @@ namespace BrunoMikoski.ScriptableObjectCollections
         {
             if (itemGUID.IsValid())
             {
+#if UNITY_EDITOR
                 for (int i = 0; i < items.Count; i++)
                 {
                     ScriptableObject item = items[i];
@@ -508,6 +646,14 @@ namespace BrunoMikoski.ScriptableObjectCollections
                         return scriptableObjectCollectionItem != null;
                     }
                 }
+#else
+                int index = IndexOfGuid(itemGUID);
+                if (index >= 0)
+                {
+                    scriptableObjectCollectionItem = ItemAt(index) as T;
+                    return scriptableObjectCollectionItem != null;
+                }
+#endif
             }
 
             scriptableObjectCollectionItem = null;
@@ -617,25 +763,17 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
         public TObjectType GetItemByGUID(LongGuid targetGUID)
         {
-            for (int i = 0; i < Items.Count; i++)
-            {
-                ScriptableObject item = Items[i];
-                ISOCItem socItem = item as ISOCItem;
-                if (socItem == null)
-                    continue;
-
-                if (socItem.GUID == targetGUID)
-                    return (TObjectType) item;
-            }
-
-            return null;
+            TryGetItemByGUID(targetGUID, out TObjectType result);
+            return result;
         }
 
         public bool TryGetItemByName<T>(string targetItemName, out T scriptableObjectCollectionItem) where T : TObjectType
         {
-            for (int i = 0; i < items.Count; i++)
+            for (int i = 0; i < ItemCount; i++)
             {
-                ScriptableObject item = items[i];
+                ScriptableObject item = ItemAt(i);
+                if (!item)
+                    continue;
                 if (string.Equals(item.name, targetItemName, StringComparison.Ordinal))
                 {
                     scriptableObjectCollectionItem = item as T;
