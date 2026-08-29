@@ -44,7 +44,10 @@ namespace BrunoMikoski.ScriptableObjectCollections.Core
 
         private static bool TryToLoadInstance<TInstance>(out TInstance result) where TInstance: ScriptableObject
         {
+            // TEMP diagnostic, remove: who forces the load, when, and what the sync cost is
+            float t0 = Time.realtimeSinceStartup;
             TInstance newInstance = Resources.Load<TInstance>(typeof(TInstance).Name);
+            Debug.Log($"[SOC] sync load {typeof(TInstance).Name} {(Time.realtimeSinceStartup - t0) * 1000f:F0}ms at t={t0 * 1000f:F0}ms\n{System.Environment.StackTrace}");
 
             if (newInstance != null)
             {

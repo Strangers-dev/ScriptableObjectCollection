@@ -29,7 +29,9 @@ namespace BrunoMikoski.ScriptableObjectCollections
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Initialize()
         {
-            Resources.LoadAsync<CollectionsRegistry>(nameof(CollectionsRegistry));
+            ResourceRequest request = Resources.LoadAsync<CollectionsRegistry>(nameof(CollectionsRegistry));
+            // TEMP diagnostic, remove with the singleton one
+            request.completed += _ => Debug.Log($"[SOC] async warm completed at t={Time.realtimeSinceStartup * 1000f:F0}ms");
         }
 
         public bool IsKnowCollection(ScriptableObjectCollection targetCollection)
