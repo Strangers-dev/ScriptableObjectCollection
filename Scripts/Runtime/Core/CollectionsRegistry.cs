@@ -77,6 +77,55 @@ namespace BrunoMikoski.ScriptableObjectCollections
 #endif
         }
 
+        public void WarmAsync(IReadOnlyList<string> assetNames)
+        {
+#if !UNITY_EDITOR
+            for (int i = 0; i < assetNames.Count; i++)
+            {
+                TryWarmAsync(assetNames[i]);
+            }
+#endif
+        }
+
+        public ResourceRequest TryWarmAsync(string assetName)
+        {
+#if !UNITY_EDITOR
+            int index = IndexOfAssetName(assetName);
+            if (index < 0)
+            {
+                return null;
+            }
+            if (loadedCollections.TryGetValue(index, out ScriptableObjectCollection cached) && cached != null)
+            {
+                return null;
+            }
+
+            // A sync ResolveAt racing this in-flight warm loads too; Unity dedupes the underlying request.
+            ResourceRequest request = Resources.LoadAsync<ScriptableObjectCollection>("Collections/" + assetName);
+            request.completed += _ =>
+            {
+                loadedCollections[index] = request.asset as ScriptableObjectCollection;
+            };
+            return request;
+#else
+            return null;
+#endif
+        }
+
+#if !UNITY_EDITOR
+        private int IndexOfAssetName(string assetName)
+        {
+            for (int i = 0; i < collectionAssetNames.Count; i++)
+            {
+                if (string.Equals(collectionAssetNames[i], assetName, StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+            return -1;
+        }
+#endif
+
         private LongGuid GuidAt(int index)
         {
 #if UNITY_EDITOR
