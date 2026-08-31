@@ -34,6 +34,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
         private bool autoSearchForCollections;
         public bool AutoSearchForCollections => autoSearchForCollections;
 
+        public IReadOnlyList<string> CollectionAssetNames => collectionAssetNames;
+
         // No boot warm: any request queued before scene load drains inside LoadFirstScene's wait,
         // putting the whole closure in the boot megaframe. Instance lazy-loads; the game preloads post-boot.
 
