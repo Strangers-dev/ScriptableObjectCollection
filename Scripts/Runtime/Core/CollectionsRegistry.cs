@@ -25,8 +25,7 @@ namespace BrunoMikoski.ScriptableObjectCollections
         private bool autoSearchForCollections;
         public bool AutoSearchForCollections => autoSearchForCollections;
 
-        // No boot warm: any request queued before scene load drains inside LoadFirstScene's wait,
-        // putting the whole closure in the boot megaframe. Instance lazy-loads; the game preloads post-boot.
+        // No boot warm: a load queued before scene load drains inside the first scene's wait. Instance lazy-loads
 
         public bool IsKnowCollection(ScriptableObjectCollection targetCollection)
         {
