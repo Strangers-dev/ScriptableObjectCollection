@@ -52,7 +52,7 @@ namespace BrunoMikoski.ScriptableObjectCollections.Core
         {
             if (SyncLoadGuard.Armed)
             {
-                string error = $"Sync load of {typeof(TInstance).Name} while the async preload is in flight: this materializes the whole closure. Gate on SOCollectionsPreloader.Ready.";
+                string error = $"Sync load of {typeof(TInstance).Name} while the async preload is in flight: this materializes the whole closure. Gate on ResourceWarmup.";
                 Debug.LogError(error);
                 // stderr survives any log-category settings in the game's log handler
                 System.Console.Error.WriteLine(error);

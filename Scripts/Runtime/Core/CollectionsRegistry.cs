@@ -34,8 +34,6 @@ namespace BrunoMikoski.ScriptableObjectCollections
         private bool autoSearchForCollections;
         public bool AutoSearchForCollections => autoSearchForCollections;
 
-        public IReadOnlyList<string> CollectionAssetNames => collectionAssetNames;
-
         // No boot warm: any request queued before scene load drains inside LoadFirstScene's wait,
         // putting the whole closure in the boot megaframe. Instance lazy-loads; the game preloads post-boot.
 
@@ -79,54 +77,29 @@ namespace BrunoMikoski.ScriptableObjectCollections
 #endif
         }
 
-        public void WarmAsync(IReadOnlyList<string> assetNames)
+        public List<ResourceRequest> WarmAllAsync()
         {
+            List<ResourceRequest> requests = new List<ResourceRequest>();
 #if !UNITY_EDITOR
-            for (int i = 0; i < assetNames.Count; i++)
-            {
-                TryWarmAsync(assetNames[i]);
-            }
-#endif
-        }
-
-        public ResourceRequest TryWarmAsync(string assetName)
-        {
-#if !UNITY_EDITOR
-            int index = IndexOfAssetName(assetName);
-            if (index < 0)
-            {
-                return null;
-            }
-            if (loadedCollections.TryGetValue(index, out ScriptableObjectCollection cached) && cached != null)
-            {
-                return null;
-            }
-
-            // A sync ResolveAt racing this in-flight warm loads too; Unity dedupes the underlying request.
-            ResourceRequest request = Resources.LoadAsync<ScriptableObjectCollection>("Collections/" + assetName);
-            request.completed += _ =>
-            {
-                loadedCollections[index] = request.asset as ScriptableObjectCollection;
-            };
-            return request;
-#else
-            return null;
-#endif
-        }
-
-#if !UNITY_EDITOR
-        private int IndexOfAssetName(string assetName)
-        {
             for (int i = 0; i < collectionAssetNames.Count; i++)
             {
-                if (string.Equals(collectionAssetNames[i], assetName, StringComparison.Ordinal))
+                if (loadedCollections.TryGetValue(i, out ScriptableObjectCollection cached) && cached != null)
                 {
-                    return i;
+                    continue;
                 }
+
+                int index = i;
+                // A sync ResolveAt racing this in-flight warm loads too; Unity dedupes the underlying request.
+                ResourceRequest request = Resources.LoadAsync<ScriptableObjectCollection>("Collections/" + collectionAssetNames[i]);
+                request.completed += _ =>
+                {
+                    loadedCollections[index] = request.asset as ScriptableObjectCollection;
+                };
+                requests.Add(request);
             }
-            return -1;
-        }
 #endif
+            return requests;
+        }
 
         private LongGuid GuidAt(int index)
         {
