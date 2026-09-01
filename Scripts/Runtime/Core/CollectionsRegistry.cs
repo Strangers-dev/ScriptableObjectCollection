@@ -69,9 +69,8 @@ namespace BrunoMikoski.ScriptableObjectCollections
             if (loadedCollections.TryGetValue(index, out ScriptableObjectCollection cached) && cached != null)
                 return cached;
 
-            string assetName = collectionAssetNames[index];
-
-            ScriptableObjectCollection collection = Resources.Load<ScriptableObjectCollection>("Collections/" + assetName);
+            CollectionStub stub = Resources.Load<CollectionStub>("Collections/" + collectionAssetNames[index]);
+            ScriptableObjectCollection collection = stub != null ? stub.Collection : null;
             loadedCollections[index] = collection;
             return collection;
 #endif
@@ -90,10 +89,13 @@ namespace BrunoMikoski.ScriptableObjectCollections
 
                 int index = i;
                 // A sync ResolveAt racing this in-flight warm loads too; Unity dedupes the underlying request.
-                ResourceRequest request = Resources.LoadAsync<ScriptableObjectCollection>("Collections/" + collectionAssetNames[i]);
+                ResourceRequest request = Resources.LoadAsync<CollectionStub>("Collections/" + collectionAssetNames[i]);
                 request.completed += _ =>
                 {
-                    loadedCollections[index] = request.asset as ScriptableObjectCollection;
+                    if (request.asset is CollectionStub stub && stub.Collection != null)
+                    {
+                        loadedCollections[index] = stub.Collection;
+                    }
                 };
                 requests.Add(request);
             }
@@ -494,6 +496,44 @@ namespace BrunoMikoski.ScriptableObjectCollections
                 ValidateCollections();
                 collections = foundCollections.ToList();
                 ObjectUtility.SetDirty(this);
+            }
+
+            SyncStubs();
+        }
+
+        private const string StubFolder = "Assets/Resources/Collections";
+
+        private void SyncStubs()
+        {
+            AssetDatabaseUtils.CreatePathIfDoesntExist(StubFolder);
+
+            HashSet<string> wanted = new HashSet<string>();
+            foreach (ScriptableObjectCollection collection in collections)
+            {
+                if (collection == null)
+                    continue;
+
+                wanted.Add(collection.name);
+                string path = $"{StubFolder}/{collection.name}.asset";
+                CollectionStub stub = AssetDatabase.LoadAssetAtPath<CollectionStub>(path);
+                if (stub == null)
+                {
+                    stub = CreateInstance<CollectionStub>();
+                    stub.Collection = collection;
+                    AssetDatabase.CreateAsset(stub, path);
+                }
+                else if (stub.Collection != collection)
+                {
+                    stub.Collection = collection;
+                    ObjectUtility.SetDirty(stub);
+                }
+            }
+
+            foreach (string guid in AssetDatabase.FindAssets($"t:{nameof(CollectionStub)}", new[] { StubFolder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!wanted.Contains(System.IO.Path.GetFileNameWithoutExtension(path)))
+                    AssetDatabase.DeleteAsset(path);
             }
         }
 
